@@ -1,18 +1,40 @@
 import os
+import logging
 import pandas as pd
+from typing import List, Optional
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, CSVLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from src.config import Config
 
-def load_documents():
+# 1. LOGGING AYARLARI
+log_dir = "logs"
+if not os.path.exists(log_dir):
+    os.makedirs(log_dir)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(os.path.join(log_dir, "ingestion.log"), encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+def load_documents() -> List[Document]:
     """
-    data/source_docs klasöründeki PDF, DOCX, CSV ve EXCEL dosyalarını okur.
+    data/source_docs klasöründeki desteklenen tüm dosyaları okur.
+    Desteklenenler: .pdf, .docx, .csv, .xlsx, .xls
     """
     source_path = "data/source_docs"
     documents = []
     
-    print(f"📂 '{source_path}' klasörü taranıyor...")
+    if not os.path.exists(source_path):
+        logger.error(f"❌ Kaynak klasör bulunamadı: {source_path}")
+        return []
+
+    logger.info(f"📂 '{source_path}' klasörü taranıyor...")
 
     for root, dirs, files in os.walk(source_path):
         for file in files:
@@ -20,71 +42,69 @@ def load_documents():
             loader = None
             
             try:
-                # 1. PDF DOSYALARI
                 if file.endswith(".pdf"):
-                    print(f"   📄 PDF Okunuyor: {file}")
+                    logger.info(f"📄 PDF Okunuyor: {file}")
                     loader = PyPDFLoader(file_path)
                     documents.extend(loader.load())
 
-                # 2. WORD DOSYALARI
                 elif file.endswith(".docx"):
-                    print(f"   📝 Word Okunuyor: {file}")
+                    logger.info(f"📝 Word Okunuyor: {file}")
                     loader = Docx2txtLoader(file_path)
                     documents.extend(loader.load())
 
-                # 3. CSV DOSYALARI
                 elif file.endswith(".csv"):
-                    print(f"   📊 CSV Okunuyor: {file}")
+                    logger.info(f"📊 CSV Okunuyor: {file}")
                     loader = CSVLoader(file_path, encoding="utf-8")
                     documents.extend(loader.load())
 
-                # 4. EXCEL DOSYALARI (YENİ EKLENDİ!)
                 elif file.endswith((".xlsx", ".xls")):
-                    print(f"   📗 Excel Okunuyor: {file}")
+                    logger.info(f"📗 Excel Okunuyor: {file}")
                     df = pd.read_excel(file_path)
                     text_data = df.to_string(index=False)
-                    
                     excel_doc = Document(
                         page_content=text_data,
                         metadata={"source": file_path, "row_count": len(df)}
                     )
                     documents.append(excel_doc)
-                    print(f"      ✅ Başarılı: Excel tablosu metne çevrildi.")
-
+                
                 else:
-                    continue
+                    # Desteklenmeyen dosyaları sessizce geç (Debug modunda gösterilebilir)
+                    logger.debug(f"Atlanan dosya formatı: {file}")
                     
             except Exception as e:
-                print(f"      ❌ HATA: {file} okunamadı! Sebebi: {e}")
+                logger.error(f"❌ HATA: {file} okunamadı! Sebebi: {e}")
     
-    print(f"📚 Toplam {len(documents)} sayfa/parça doküman yüklendi.")
+    logger.info(f"📚 Toplam {len(documents)} sayfa/parça doküman başarıyla yüklendi.")
     return documents
 
-def split_documents(documents):
+def split_documents(documents: List[Document]) -> List[Document]:
     """
-    Okunan dokümanları küçük parçalara (Chunks) böler.
+    Dokümanları Config ayarına göre parçalar (Chunking).
     """
     if not documents:
-        print("⚠️  Hiçbir doküman yüklenemedi.")
+        logger.warning("⚠️  Parçalanacak doküman bulunamadı.")
         return []
         
-    print(f"✂️  Dokümanlar parçalanıyor...")
+    logger.info(f"✂️  {len(documents)} adet doküman parçalanıyor (Size: {Config.CHUNK_SIZE}, Overlap: {Config.CHUNK_OVERLAP})...")
     
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=Config.CHUNK_SIZE,
-        chunk_overlap=Config.CHUNK_OVERLAP
-    )
-    
-    chunks = text_splitter.split_documents(documents)
-    
-    print(f"🧩 Toplam {len(chunks)} parçaya bölündü.")
-    
-    if len(chunks) > 0:
-        print("-" * 30)
-        print(f"👀 Örnek Parça (İlk 200 karakter):\n{chunks[0].page_content[:200]}...")
-        print("-" * 30)
+    try:
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=Config.CHUNK_SIZE,
+            chunk_overlap=Config.CHUNK_OVERLAP
+        )
         
-    return chunks
+        chunks = text_splitter.split_documents(documents)
+        
+        logger.info(f"🧩 İşlem Tamam: Toplam {len(chunks)} parçaya bölündü.")
+        
+        if len(chunks) > 0:
+            logger.info(f"👀 Örnek Parça Başlangıcı: {chunks[0].page_content[:100]}...")
+            
+        return chunks
+        
+    except Exception as e:
+        logger.error(f"❌ Parçalama işlemi sırasında hata: {e}")
+        return []
 
 if __name__ == "__main__":
     docs = load_documents()
