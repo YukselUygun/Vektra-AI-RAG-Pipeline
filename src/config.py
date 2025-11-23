@@ -12,7 +12,7 @@ class Config:
     LLM_MODEL_NAME = "gemini-2.0-flash"
     
     # Embedding (Tercüman): Metni sayıya çeviren model
-    EMBEDDING_MODEL_NAME = "models/embedding-001"
+    EMBEDDING_MODEL_NAME = "models/text-embedding-004"
     
     # 3. Vektör Veritabanı Ayarları
     VECTOR_DB_PATH = "faiss_index"
