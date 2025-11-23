@@ -1,19 +1,18 @@
-# Core AI & LangChain
-langchain
-langchain-google-genai
-langchain-community
+# Core AI & LangChain (Güncel ve uyumlu sürümler)
+langchain==0.1.16
+langchain-community==0.0.34
+langchain-core==0.1.45
+langchain-google-genai==1.0.3
+google-generativeai==0.5.2
 
-# Web Interface
+# Web Interface (Streamlit uyumlu paketler)
 streamlit
+cachetools<5.5.0
+packaging<24.0
+protobuf<5.0.0.dev0
 
-# Vector Database
+# Vector Database & Utils
 faiss-cpu
-
-# File Handling
 pypdf
-
-# Environment Management
 python-dotenv
-
-# Data Manipulation
 pandas
