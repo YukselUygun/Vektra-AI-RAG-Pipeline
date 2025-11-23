@@ -1,0 +1,19 @@
+# Core AI & LangChain
+langchain
+langchain-google-genai
+langchain-community
+
+# Web Interface
+streamlit
+
+# Vector Database
+faiss-cpu
+
+# File Handling
+pypdf
+
+# Environment Management
+python-dotenv
+
+# Data Manipulation
+pandas
