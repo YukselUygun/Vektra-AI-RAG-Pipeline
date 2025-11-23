@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Environment Variables (ŞİFRELERİN GİTMEMESİ İÇİN ÇOK ÖNEMLİ)
+.env
+
+# IDE Settings
+.vscode/
+.idea/
+
+# Data (Büyük dosyalar gitmesin)
+data/
+*.pdf
