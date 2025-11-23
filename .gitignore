@@ -21,3 +21,7 @@ data/
 
 logs/
 *.log
+
+faiss_index/
+*.faiss
+*.pkl

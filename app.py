@@ -2,19 +2,29 @@ import streamlit as st
 import os
 import time
 import logging
+
+# Modüllerimiz
 from src.ingestion import load_documents, split_documents
 from src.vector_store import create_vector_db
 from src.rag_chain import get_rag_chain
+from src.utils import get_user_dirs, clear_user_data
 
+# LOG AYARI
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 st.set_page_config(
     page_title="Vektra AI | Kurumsal Hafıza",
-    page_icon="Vektra_logo.png",  
+    page_icon="assets/logo.png", # Logonun "assets" klasöründe olduğunu varsayıyoruz
     layout="wide"
 )
 
-st.title(" Vektra AI - Kurumsal Asistan")
+user_source_dir, user_vector_db_dir = get_user_dirs()
+
+if os.path.exists("assets/logo.png"):
+    st.image("assets/logo.png", width=100)
+
+st.title("Vektra AI - Kurumsal Asistan")
 st.markdown(
     """
     Bu asistan, yüklediğiniz **PDF, Word, Excel ve CSV** dosyalarını okur, analiz eder 
@@ -22,96 +32,106 @@ st.markdown(
     """
 )
 
-#YAN MENÜ- VERİ YÜKLEME ALANI 
+# YAN MENÜ 
 with st.sidebar:
-    st.image("Vektra_logo.png", width=200)
+    if os.path.exists("assets/logo.png"):
+        st.image("assets/logo.png", use_column_width=True)
+        
     st.header("📂 Doküman Yönetimi")
+    st.info(f"Oturum ID: {os.path.basename(user_source_dir)}") # Debug için ID gösterelim
     
-    # 1. Dosya Yükleyici 
     uploaded_files = st.file_uploader(
-        "Dokümanları buraya sürükleyin",
+        "PDF, Word, Excel veya CSV yükleyin",
         accept_multiple_files=True,
         type=["pdf", "docx", "csv", "xlsx"]
     )
     
-    # 2. İşle Butonu
-    if st.button("🚀 Verileri İşle ve Hafızaya At"):
-        if not uploaded_files:
-            st.warning("Lütfen önce dosya yükleyin!")
-        else:
-            with st.spinner("Dokümanlar işleniyor... Bu biraz zaman alabilir ⏳"):
-                
-                save_dir = "data/source_docs"
-                if not os.path.exists(save_dir):
-                    os.makedirs(save_dir)
-                
-                for f in os.listdir(save_dir):
-                    os.remove(os.path.join(save_dir, f))
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        process_btn = st.button("🚀 Verileri İşle")
+        
+    with col2:
+        if st.button("🗑️ Temizle"):
+            clear_user_data()
+            st.success("Hafıza temizlendi!")
+            time.sleep(1)
+            st.rerun()
 
+    # İŞLEME BUTONU MANTIĞI
+    if process_btn and uploaded_files:
+        with st.spinner("Dokümanlar analiz ediliyor... ⏳"):
+            try:
+                
+                if not os.path.exists(user_source_dir):
+                    os.makedirs(user_source_dir)
+
+                # 2. Dosyaları Kaydet
                 for uploaded_file in uploaded_files:
-                    file_path = os.path.join(save_dir, uploaded_file.name)
+                    file_path = os.path.join(user_source_dir, uploaded_file.name)
                     with open(file_path, "wb") as f:
                         f.write(uploaded_file.getbuffer())
                 
-                st.success(f"✅ {len(uploaded_files)} dosya başarıyla yüklendi!")
-                
+                # 3. Ingestion (Okuma & Parçalama)
                 st.text("📄 Dosyalar okunuyor...")
-                docs = load_documents()
+                docs = load_documents(user_source_dir)
                 chunks = split_documents(docs)
                 
+                # 4. Vector Store (Kaydetme)
                 st.text("🧠 Bilgiler vektörlere çevriliyor...")
-                create_vector_db(chunks)
+                create_vector_db(chunks, user_vector_db_dir)
                 
-                st.success("🎉 İşlem Tamam! Vektra artık bu dokümanları biliyor.")
-                time.sleep(1)
-                st.rerun()
+                st.success(f"✅ {len(uploaded_files)} dosya başarıyla öğrenildi!")
+                
+            except Exception as e:
+                st.error(f"Hata oluştu: {e}")
+                logger.error(f"UI Error: {e}", exc_info=True)
 
-#ANA EKRAN
+# CHAT EKRANI
 
-# 1. Sohbet Geçmişini Başlat
+# Sohbet geçmişini başlat
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "Merhaba! Dokümanlarınız hakkında bana soru sorabilirsiniz. 👋"}
+        {"role": "assistant", "content": "Merhaba! Yüklediğiniz dokümanlarla ilgili ne bilmek istersiniz?"}
     ]
 
-# 2. Geçmiş Mesajları Ekrana Yazdır
+# Mesajları ekrana bas
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# 3. Kullanıcıdan Girdi Al
+# Kullanıcıdan soru al
 if prompt := st.chat_input("Sorunuzu buraya yazın..."):
     
-    # A) Kullanıcı mesajını ekrana koy ve hafızaya at
+    # Kullanıcı mesajını göster
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
         
-    # B) AI Cevabını Üret
+    # AI Cevabı
     with st.chat_message("assistant"):
-        with st.spinner("Vektra düşünüyor... 🤔"):
+        with st.spinner("Cevap aranıyor..."):
             try:
-                # RAG Zincirini Çağır
-                qa_chain = get_rag_chain()
+                # Kullanıcının ÖZEL veritabanını kullanarak zinciri kur
+                qa_chain = get_rag_chain(user_vector_db_dir)
                 
                 if qa_chain:
-                    # Soruyu sor ve cevabı al
                     response = qa_chain.invoke({"query": prompt})
                     result = response['result']
                     
-                    # Kaynakları göster
-                    sources = [doc.metadata.get('source', 'Bilinmiyor') for doc in response['source_documents']]
+                    # Kaynakları topla
+                    sources = [os.path.basename(doc.metadata.get('source', '')) for doc in response['source_documents']]
                     sources = list(set(sources))
                     
                     st.markdown(result)
                     
                     if sources:
-                        st.caption(f"📚 Kaynaklar: {', '.join([os.path.basename(s) for s in sources])}")
+                        st.caption(f"📚 Kaynaklar: {', '.join(sources)}")
                         
                     st.session_state.messages.append({"role": "assistant", "content": result})
                 else:
-                    st.error("Hata: RAG Zinciri oluşturulamadı. Lütfen önce veri yükleyin.")
-
+                    st.warning("⚠️ Lütfen önce sol taraftan doküman yükleyip 'Verileri İşle' butonuna basın.")
+                    
             except Exception as e:
-                logger.error(f"🚨 Kritik Hata: {str(e)}", exc_info=True)
-                st.error(f"Bir hata oluştu: {e}. Lütfen logları kontrol edin.")
+                logger.error(f"Chat Error: {e}", exc_info=True)
+                st.error("Bir sorun oluştu. Lütfen doküman yüklediğinizden emin olun.")

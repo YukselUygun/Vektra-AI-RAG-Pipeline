@@ -22,12 +22,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def load_documents() -> List[Document]:
+def load_documents(custom_path: str = None) -> List[Document]:
     """
-    data/source_docs klasöründeki desteklenen tüm dosyaları okur.
-    Desteklenenler: .pdf, .docx, .csv, .xlsx, .xls
+    Belirtilen klasördeki dosyaları okur.
     """
-    source_path = "data/source_docs"
+    source_path = custom_path if custom_path else "data/source_docs"
+    
     documents = []
     
     if not os.path.exists(source_path):
