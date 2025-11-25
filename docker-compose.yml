@@ -1,56 +1,55 @@
 version: '3.8'
 
 services:
-  # 1. VERİ AMBARI & METADATA DB (PostgreSQL)
+  # 1. VERİ AMBARI (Vektra DB)
   postgres:
     image: postgres:13
     container_name: vektra_db
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: mysecretpassword
-      POSTGRES_DB: vektra_dwh  
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "postgres"]
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER}"]
       interval: 5s
       retries: 5
 
-  # 2. AIRFLOW METADATA DB 
+  # 2. AIRFLOW METADATA DB (Sadece Dahili Erişim)
   airflow-postgres:
     image: postgres:13
-    container_name: vektra_airflow_meta_db 
+    container_name: vektra_airflow_meta_db
     environment:
-      POSTGRES_USER: airflow
-      POSTGRES_PASSWORD: airflow
-      POSTGRES_DB: airflow
+      POSTGRES_USER: ${AIRFLOW_DB_USER}
+      POSTGRES_PASSWORD: ${AIRFLOW_DB_PASSWORD}
+      POSTGRES_DB: ${AIRFLOW_DB_NAME}
     volumes:
       - airflow_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "airflow"]
+      test: ["CMD", "pg_isready", "-U", "${AIRFLOW_DB_USER}"]
       interval: 5s
       retries: 5
 
-  # 3. AIRFLOW WEBSERVER (Arayüz)
+  # 3. AIRFLOW WEBSERVER
   airflow-webserver:
     build: .
-    container_name: vektra_airflow_webserver 
+    container_name: vektra_airflow_webserver
     command: webserver
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@vektra_airflow_meta_db/airflow # <-- BAĞLANTI GÜNCELLENDİ
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@vektra_airflow_meta_db/${AIRFLOW_DB_NAME}
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
-      # Uygulama Veritabanı Ayarları
       - DB_HOST=postgres
-      - DB_USER=postgres
-      - DB_PASSWORD=mysecretpassword
-      - DB_NAME=vektra_dwh 
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
       - DB_PORT=5432
     volumes:
       - ./dags:/opt/airflow/dags
@@ -63,20 +62,19 @@ services:
       postgres:
         condition: service_healthy
 
-  # 4. AIRFLOW SCHEDULER (Zamanlayıcı)
+  # 4. AIRFLOW SCHEDULER
   airflow-scheduler:
     build: .
-    container_name: vektra_airflow_scheduler 
+    container_name: vektra_airflow_scheduler
     command: scheduler
     environment:
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@vektra_airflow_meta_db/airflow # <-- BAĞLANTI GÜNCELLENDİ
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@vektra_airflow_meta_db/${AIRFLOW_DB_NAME}
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
-      # --- Uygulama Veritabanı Ayarları ---
       - DB_HOST=postgres
-      - DB_USER=postgres
-      - DB_PASSWORD=mysecretpassword
-      - DB_NAME=vektra_dwh 
+      - DB_USER=${POSTGRES_USER}
+      - DB_PASSWORD=${POSTGRES_PASSWORD}
+      - DB_NAME=${POSTGRES_DB}
       - DB_PORT=5432
     volumes:
       - ./dags:/opt/airflow/dags
@@ -87,12 +85,12 @@ services:
       airflow-webserver:
         condition: service_started
 
-  # 5. AIRFLOW INIT 
+  # 5. AIRFLOW INIT
   airflow-init:
     build: .
-    container_name: vektra_airflow_init 
+    container_name: vektra_airflow_init
     environment:
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@vektra_airflow_meta_db/airflow # <-- BAĞLANTI GÜNCELLENDİ
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${AIRFLOW_DB_USER}:${AIRFLOW_DB_PASSWORD}@vektra_airflow_meta_db/${AIRFLOW_DB_NAME}
     command: bash -c "airflow db init && airflow users create --username admin --firstname Yuksel --lastname Uygun --role Admin --email admin@example.com --password admin"
     depends_on:
       airflow-postgres:

@@ -3,11 +3,11 @@ import os
 import time
 import logging
 
-# Modüllerimiz
 from src.ingestion import load_documents, split_documents
 from src.vector_store import create_vector_db
 from src.rag_chain import get_rag_chain
 from src.utils import get_user_dirs, clear_user_data
+from src.database import insert_document_log
 
 # LOG AYARI
 logging.basicConfig(level=logging.INFO)
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 st.set_page_config(
     page_title="Vektra AI | Kurumsal Hafıza",
-    page_icon="assets/logo.png", # Logonun "assets" klasöründe olduğunu varsayıyoruz
+    page_icon="assets/logo.png",
     layout="wide"
 )
 
@@ -72,16 +72,32 @@ with st.sidebar:
                     with open(file_path, "wb") as f:
                         f.write(uploaded_file.getbuffer())
                 
-                # 3. Ingestion (Okuma & Parçalama)
+                # 3. Ingestion 
                 st.text("📄 Dosyalar okunuyor...")
+                start_time = time.time()  
                 docs = load_documents(user_source_dir)
                 chunks = split_documents(docs)
                 
-                # 4. Vector Store (Kaydetme)
+                # 4. Vector Store 
                 st.text("🧠 Bilgiler vektörlere çevriliyor...")
                 create_vector_db(chunks, user_vector_db_dir)
+
+                end_time = time.time() # <-- Bitiş zamanı
+                total_time = round(end_time - start_time, 2)
+
+                # VERİTABANI KAYDI
+                session_id = os.path.basename(user_source_dir) # user_123...
+                for uploaded_file in uploaded_files:
+                    insert_document_log(
+                        session_id=session_id,
+                        filename=uploaded_file.name,
+                        file_type=uploaded_file.type,
+                        chunk_count=len(chunks),
+                        processing_time=total_time
+                    )
                 
                 st.success(f"✅ {len(uploaded_files)} dosya başarıyla öğrenildi!")
+                st.success(f"✅ İşlem {total_time} saniyede tamamlandı ve veritabanına işlendi!")
                 
             except Exception as e:
                 st.error(f"Hata oluştu: {e}")
