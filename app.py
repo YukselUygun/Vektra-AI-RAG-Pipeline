@@ -1,153 +1,76 @@
 import streamlit as st
-import os
-import time
 import logging
-
-from src.ingestion import load_documents, split_documents
-from src.vector_store import create_vector_db
+from src.ui.login import render_login
+from src.ui.sidebar import render_sidebar
+from src.ui.dashboard import render_dashboard
 from src.rag_chain import get_rag_chain
-from src.utils import get_user_dirs, clear_user_data
-from src.database import insert_document_log
+from src.utils import get_shared_dirs 
 
-# LOG AYARI
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
-st.set_page_config(
-    page_title="Vektra AI | Kurumsal Hafıza",
-    page_icon="assets/logo.png",
-    layout="wide"
-)
+st.set_page_config(page_title="Vektra AI", page_icon="assets/logo.png", layout="wide")
 
-user_source_dir, user_vector_db_dir = get_user_dirs()
+shared_source_dir, shared_vector_db_dir = get_shared_dirs()
 
-if os.path.exists("assets/logo.png"):
-    st.image("assets/logo.png", width=100)
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+    st.session_state.user_role = None
 
-st.title("Vektra AI - Kurumsal Asistan")
-st.markdown(
-    """
-    Bu asistan, yüklediğiniz **PDF, Word, Excel ve CSV** dosyalarını okur, analiz eder 
-    ve sorularınıza **dokümanlara dayanarak** cevap verir.
-    """
-)
-
-# YAN MENÜ 
-with st.sidebar:
-    if os.path.exists("assets/logo.png"):
-        st.image("assets/logo.png", use_column_width=True)
+if not st.session_state.logged_in:
+    render_login()
+else:
+    role = st.session_state.user_role
+    
+    render_sidebar(role, shared_source_dir, shared_vector_db_dir)
+    
+    st.title(f"🤖 Vektra AI ({role} Modu)")
+    
+    if role == "Admin":
+        tab1, tab2 = st.tabs(["💬 Sohbet", "📊 Yönetim Paneli"])
         
-    st.header("📂 Doküman Yönetimi")
-    st.info(f"Oturum ID: {os.path.basename(user_source_dir)}") # Debug için ID gösterelim
-    
-    uploaded_files = st.file_uploader(
-        "PDF, Word, Excel veya CSV yükleyin",
-        accept_multiple_files=True,
-        type=["pdf", "docx", "csv", "xlsx"]
-    )
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        process_btn = st.button("🚀 Verileri İşle")
+        with tab1:
+            if "messages" not in st.session_state:
+                st.session_state.messages = [{"role": "assistant", "content": "Yönetici modundasınız. Test edebilirsiniz."}]
+
+            for msg in st.session_state.messages:
+                st.chat_message(msg["role"]).write(msg["content"])
+
+            if prompt := st.chat_input():
+                st.session_state.messages.append({"role": "user", "content": prompt})
+                st.chat_message("user").write(prompt)
+                
+                with st.chat_message("assistant"):
+                    # Admin de ortak alandan okur
+                    qa_chain = get_rag_chain(shared_vector_db_dir)
+                    if qa_chain:
+                        res = qa_chain.invoke({"query": prompt})
+                        st.write(res['result'])
+                        st.session_state.messages.append({"role": "assistant", "content": res['result']})
+                    else:
+                        st.warning("Bilgi bankası boş.")
         
-    with col2:
-        if st.button("🗑️ Temizle"):
-            clear_user_data()
-            st.success("Hafıza temizlendi!")
-            time.sleep(1)
-            st.rerun()
+        with tab2:
+            render_dashboard()
 
-    # İŞLEME BUTONU MANTIĞI
-    if process_btn and uploaded_files:
-        with st.spinner("Dokümanlar analiz ediliyor... ⏳"):
-            try:
-                
-                if not os.path.exists(user_source_dir):
-                    os.makedirs(user_source_dir)
-
-                # 2. Dosyaları Kaydet
-                for uploaded_file in uploaded_files:
-                    file_path = os.path.join(user_source_dir, uploaded_file.name)
-                    with open(file_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                
-                # 3. Ingestion 
-                st.text("📄 Dosyalar okunuyor...")
-                start_time = time.time()  
-                docs = load_documents(user_source_dir)
-                chunks = split_documents(docs)
-                
-                # 4. Vector Store 
-                st.text("🧠 Bilgiler vektörlere çevriliyor...")
-                create_vector_db(chunks, user_vector_db_dir)
-
-                end_time = time.time() # <-- Bitiş zamanı
-                total_time = round(end_time - start_time, 2)
-
-                # VERİTABANI KAYDI
-                session_id = os.path.basename(user_source_dir) # user_123...
-                for uploaded_file in uploaded_files:
-                    insert_document_log(
-                        session_id=session_id,
-                        filename=uploaded_file.name,
-                        file_type=uploaded_file.type,
-                        chunk_count=len(chunks),
-                        processing_time=total_time
-                    )
-                
-                st.success(f"✅ {len(uploaded_files)} dosya başarıyla öğrenildi!")
-                st.success(f"✅ İşlem {total_time} saniyede tamamlandı ve veritabanına işlendi!")
-                
-            except Exception as e:
-                st.error(f"Hata oluştu: {e}")
-                logger.error(f"UI Error: {e}", exc_info=True)
-
-# CHAT EKRANI
-
-# Sohbet geçmişini başlat
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {"role": "assistant", "content": "Merhaba! Yüklediğiniz dokümanlarla ilgili ne bilmek istersiniz?"}
-    ]
-
-# Mesajları ekrana bas
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-# Kullanıcıdan soru al
-if prompt := st.chat_input("Sorunuzu buraya yazın..."):
-    
-    # Kullanıcı mesajını göster
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    else:
+        # USER MODU (ÇALIŞAN)
+        st.subheader("💬 Doküman Asistanı")
         
-    # AI Cevabı
-    with st.chat_message("assistant"):
-        with st.spinner("Cevap aranıyor..."):
-            try:
-                # Kullanıcının ÖZEL veritabanını kullanarak zinciri kur
-                qa_chain = get_rag_chain(user_vector_db_dir)
-                
+        if "messages" not in st.session_state:
+            st.session_state.messages = [{"role": "assistant", "content": "Merhaba! Şirket dokümanları hakkında soru sorabilirsiniz."}]
+
+        for msg in st.session_state.messages:
+            st.chat_message(msg["role"]).write(msg["content"])
+
+        if prompt := st.chat_input():
+            st.session_state.messages.append({"role": "user", "content": prompt})
+            st.chat_message("user").write(prompt)
+            
+            with st.chat_message("assistant"):
+                qa_chain = get_rag_chain(shared_vector_db_dir)
                 if qa_chain:
-                    response = qa_chain.invoke({"query": prompt})
-                    result = response['result']
-                    
-                    # Kaynakları topla
-                    sources = [os.path.basename(doc.metadata.get('source', '')) for doc in response['source_documents']]
-                    sources = list(set(sources))
-                    
-                    st.markdown(result)
-                    
-                    if sources:
-                        st.caption(f"📚 Kaynaklar: {', '.join(sources)}")
-                        
-                    st.session_state.messages.append({"role": "assistant", "content": result})
+                    res = qa_chain.invoke({"query": prompt})
+                    st.write(res['result'])
+                    st.session_state.messages.append({"role": "assistant", "content": res['result']})
                 else:
-                    st.warning("⚠️ Lütfen önce sol taraftan doküman yükleyip 'Verileri İşle' butonuna basın.")
-                    
-            except Exception as e:
-                logger.error(f"Chat Error: {e}", exc_info=True)
-                st.error("Bir sorun oluştu. Lütfen doküman yüklediğinizden emin olun.")
+                    st.error("Henüz yönetici tarafından sisteme veri yüklenmemiş. Lütfen bekleyiniz.")
