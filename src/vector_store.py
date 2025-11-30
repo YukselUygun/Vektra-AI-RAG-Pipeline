@@ -6,8 +6,8 @@ from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from src.embedding import get_embedding_model
 from src.config import Config
+from src.utils import get_shared_dirs
 
-# 1. LOGGING
 log_dir = "logs"
 if not os.path.exists(log_dir):
     os.makedirs(log_dir)
@@ -76,7 +76,7 @@ def load_vector_db(load_path: str) -> Optional[FAISS]:
     try:
         embedding_model = get_embedding_model()
         
-        # Yükleme (Dinamik Yoldan)
+        # Yükleme
         vector_store = FAISS.load_local(
             load_path, 
             embedding_model,
@@ -91,19 +91,20 @@ def load_vector_db(load_path: str) -> Optional[FAISS]:
         return None
 
 if __name__ == "__main__":
-    # Test Senaryosu 
     from src.ingestion import load_documents, split_documents
     
-    test_db_path = "faiss_index_test"
-    logger.info("🚀 --- VEKTÖR DB TEST BAŞLANGICI ---")
+    logger.info("🚀 Vector Store Modülü Başlatılıyor (Airflow Mode)...")
     
-    # Test verisi yoksa 'data/source_docs'tan oku
-    docs = load_documents() 
+    shared_source_dir, shared_db_path = get_shared_dirs()
+    logger.info(f"📥 Kaynak: {shared_source_dir}")
+    logger.info(f"💾 Hedef DB: {shared_db_path}")
+    
+    docs = load_documents(shared_source_dir)
     chunks = split_documents(docs)
     
     if chunks:
-        create_vector_db(chunks, test_db_path)
+        create_vector_db(chunks, shared_db_path)
+    else:
+        logger.warning("⚠️ İşlenecek doküman bulunamadı.")
     
-    load_vector_db(test_db_path)
-    
-    logger.info("🏁 --- TEST BİTİŞİ ---")
+    logger.info("🏁 Vector Store İşlemi Tamamlandı.")

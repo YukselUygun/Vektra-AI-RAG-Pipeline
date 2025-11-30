@@ -1,12 +1,13 @@
-# AI & LangChain
-langchain
-langchain-community
-langchain-core
-langchain-google-genai
-google-generativeai
+# LangChain Kararlı Sürüm (0.2.x Serisi - Hata Vermeyenler)
+langchain==0.2.16
+langchain-community==0.2.16
+langchain-core==0.2.38
+langchain-google-genai==1.0.10
+google-generativeai==0.7.2
+langchain-text-splitters
 
 # Web & Araçlar
-streamlit
+streamlit==1.38.0
 python-dotenv
 pypdf
 faiss-cpu
@@ -15,6 +16,6 @@ numpy
 docx2txt
 openpyxl
 
-# Veritabanı & Airflow Bağlantıları
+# Postgres bağlantısı 
 psycopg2-binary
 apache-airflow-providers-postgres

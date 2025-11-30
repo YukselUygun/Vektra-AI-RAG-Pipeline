@@ -11,13 +11,18 @@ def get_session_id():
 def get_shared_dirs():
     """
     TÜM ŞİRKETİN ORTAK KULLANDIĞI KLASÖRLER.
-    Admin buraya yazar, User buradan okur.
+    Yolları 'Absolute Path' (Tam Yol) olarak verir, böylece Docker/Airflow şaşırmaz.
     """
-    base_data_dir = "data"
+
+    current_file_path = os.path.abspath(__file__) 
     
-    shared_source_dir = os.path.join(base_data_dir, "shared_docs")
+    src_dir = os.path.dirname(current_file_path)
     
-    shared_vector_db_dir = os.path.join("faiss_index", "shared_index")
+    project_root = os.path.dirname(src_dir)
+    
+    shared_source_dir = os.path.join(project_root, "data", "shared_docs")
+    
+    shared_vector_db_dir = os.path.join(project_root, "faiss_index", "shared_index")
     
     if not os.path.exists(shared_source_dir):
         os.makedirs(shared_source_dir)

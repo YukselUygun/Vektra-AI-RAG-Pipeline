@@ -3,9 +3,10 @@ import logging
 import pandas as pd
 from typing import List, Optional
 from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, CSVLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from src.config import Config
+from src.utils import get_shared_dirs
 
 # 1. LOGGING AYARLARI
 log_dir = "logs"
@@ -26,6 +27,7 @@ def load_documents(custom_path: str = None) -> List[Document]:
     """
     Belirtilen klasördeki dosyaları okur.
     """
+    # Eğer yol verilmezse varsayılanı kullan
     source_path = custom_path if custom_path else "data/source_docs"
     
     documents = []
@@ -39,7 +41,6 @@ def load_documents(custom_path: str = None) -> List[Document]:
     for root, dirs, files in os.walk(source_path):
         for file in files:
             file_path = os.path.join(root, file)
-            loader = None
             
             try:
                 if file.endswith(".pdf"):
@@ -67,10 +68,6 @@ def load_documents(custom_path: str = None) -> List[Document]:
                     )
                     documents.append(excel_doc)
                 
-                else:
-                    # Desteklenmeyen dosyaları sessizce geç (Debug modunda gösterilebilir)
-                    logger.debug(f"Atlanan dosya formatı: {file}")
-                    
             except Exception as e:
                 logger.error(f"❌ HATA: {file} okunamadı! Sebebi: {e}")
     
@@ -85,7 +82,7 @@ def split_documents(documents: List[Document]) -> List[Document]:
         logger.warning("⚠️  Parçalanacak doküman bulunamadı.")
         return []
         
-    logger.info(f"✂️  {len(documents)} adet doküman parçalanıyor (Size: {Config.CHUNK_SIZE}, Overlap: {Config.CHUNK_OVERLAP})...")
+    logger.info(f"✂️  {len(documents)} adet doküman parçalanıyor...")
     
     try:
         text_splitter = RecursiveCharacterTextSplitter(
@@ -96,10 +93,6 @@ def split_documents(documents: List[Document]) -> List[Document]:
         chunks = text_splitter.split_documents(documents)
         
         logger.info(f"🧩 İşlem Tamam: Toplam {len(chunks)} parçaya bölündü.")
-        
-        if len(chunks) > 0:
-            logger.info(f"👀 Örnek Parça Başlangıcı: {chunks[0].page_content[:100]}...")
-            
         return chunks
         
     except Exception as e:
@@ -107,6 +100,15 @@ def split_documents(documents: List[Document]) -> List[Document]:
         return []
 
 if __name__ == "__main__":
-    docs = load_documents()
+    
+    logger.info("🚀 Ingestion Modülü Başlatılıyor (Airflow Mode)...")
+
+    shared_source_dir, _ = get_shared_dirs()
+    logger.info(f"📂 Hedef Klasör: {shared_source_dir}")
+
+    docs = load_documents(shared_source_dir)
+    
     if docs:
-        chunks = split_documents(docs)
+        split_documents(docs)
+        
+    logger.info("✅ Ingestion Modülü Tamamlandı.")
