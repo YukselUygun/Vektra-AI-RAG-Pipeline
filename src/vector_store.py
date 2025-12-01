@@ -25,18 +25,24 @@ logger = logging.getLogger(__name__)
 def create_vector_db(chunks: List[Document], save_path: str) -> Optional[FAISS]:
     """
     Parçalanmış metinleri vektöre çevirip, BELİRTİLEN YOLA (save_path) kaydeder.
+    Yazma işlemi atomik yapılır: önce geçici klasöre kaydedilir, sonra swap edilir.
     """
+    import shutil
+    import uuid
+
     if not chunks:
         logger.warning("⚠️ Vektörleştirilecek veri yok. İşlem atlandı.")
         return None
 
-    # Klasör yoksa oluştur
-    if not os.path.exists(save_path):
+    base_dir = os.path.dirname(save_path)
+    if base_dir and not os.path.exists(base_dir):
         try:
-            os.makedirs(save_path)
+            os.makedirs(base_dir)
         except OSError as e:
-            logger.error(f"❌ Klasör oluşturulurken hata: {e}")
+            logger.error(f"❌ Ana klasör oluşturulurken hata: {e}")
             return None
+
+    tmp_save_path = f"{save_path}_tmp_{uuid.uuid4().hex}"
 
     try:
         start_time = time.time()
@@ -44,23 +50,31 @@ def create_vector_db(chunks: List[Document], save_path: str) -> Optional[FAISS]:
         
         embedding_model = get_embedding_model()
         
-        logger.info(f"🚀 {len(chunks)} parça için Vektör DB oluşturuluyor...")
-        
-        # FAISS oluşturma
+        logger.info(f"🚀 {len(chunks)} parça için Vektör DB oluşturuluyor (tmp: {tmp_save_path})...")
+    
         vector_store = FAISS.from_documents(
             documents=chunks,
             embedding=embedding_model
         )
-        
-        # Kaydetme 
-        vector_store.save_local(save_path)
+        vector_store.save_local(tmp_save_path)
+
+        if os.path.exists(save_path):
+            logger.info(f"🗑️ Eski index klasörü siliniyor: {save_path}")
+            shutil.rmtree(save_path)
+
+        os.rename(tmp_save_path, save_path)
         
         duration = time.time() - start_time
-        logger.info(f"💾 Veritabanı başarıyla kaydedildi: {save_path} (Süre: {duration:.2f}s)")
+        logger.info(f"💾 Veritabanı başarıyla GÜNCELLENDİ: {save_path} (Süre: {duration:.2f}s)")
         return vector_store
 
     except Exception as e:
         logger.error(f"❌ Vektör DB oluşturulurken kritik hata: {e}")
+        if os.path.exists(tmp_save_path):
+            try:
+                shutil.rmtree(tmp_save_path)
+            except Exception:
+                pass
         raise e
 
 def load_vector_db(load_path: str) -> Optional[FAISS]:
