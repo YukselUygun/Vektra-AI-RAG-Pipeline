@@ -69,3 +69,28 @@ def get_all_logs():
     except Exception as e:
         logger.error(f"❌ Veri çekilirken hata: {e}")
         return pd.DataFrame()
+    
+def insert_chat_log(session_id: str, user_role: str, message_role: str, message: str):
+    """
+    Kullanıcı ve asistan mesajlarını chat_logs tablosuna yazar.
+    """
+    engine = get_db_engine()
+    if not engine:
+        return
+
+    insert_query = text("""
+        INSERT INTO chat_logs (session_id, user_role, message_role, message)
+        VALUES (:session_id, :user_role, :message_role, :message)
+    """)
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(insert_query, {
+                "session_id": session_id,
+                "user_role": user_role,
+                "message_role": message_role,
+                "message": message
+            })
+        logger.info(f"💬 Chat log kaydedildi ({user_role}/{message_role})")
+    except Exception as e:
+        logger.error(f"❌ Chat log kaydı sırasında hata: {e}")

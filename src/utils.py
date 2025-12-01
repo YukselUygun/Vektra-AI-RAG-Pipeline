@@ -10,23 +10,18 @@ def get_session_id():
 
 def get_shared_dirs():
     """
-    TÜM ŞİRKETİN ORTAK KULLANDIĞI KLASÖRLER.
-    Yolları 'Absolute Path' (Tam Yol) olarak verir, böylece Docker/Airflow şaşırmaz.
+    Windows FAISS, Türkçe karakterleri desteklemediği için
+    index dizini ASCII karakterli bir klasöre taşındı.
     """
 
-    current_file_path = os.path.abspath(__file__) 
-    
-    src_dir = os.path.dirname(current_file_path)
-    
-    project_root = os.path.dirname(src_dir)
-    
-    shared_source_dir = os.path.join(project_root, "data", "shared_docs")
-    
-    shared_vector_db_dir = os.path.join(project_root, "faiss_index", "shared_index")
-    
-    if not os.path.exists(shared_source_dir):
-        os.makedirs(shared_source_dir)
-        
+    base_dir = r"C:\vektra_data"
+
+    shared_source_dir = os.path.join(base_dir, "shared_docs")
+    shared_vector_db_dir = os.path.join(base_dir, "shared_index")
+
+    os.makedirs(shared_source_dir, exist_ok=True)
+    os.makedirs(shared_vector_db_dir, exist_ok=True)
+
     return shared_source_dir, shared_vector_db_dir
 
 def clear_shared_data():

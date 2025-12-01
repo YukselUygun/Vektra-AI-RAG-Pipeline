@@ -4,13 +4,16 @@ from src.ui.login import render_login
 from src.ui.sidebar import render_sidebar
 from src.ui.dashboard import render_dashboard
 from src.rag_chain import get_rag_chain
-from src.utils import get_shared_dirs 
+from src.utils import get_shared_dirs, get_session_id
+from src.database import insert_chat_log
 
 logging.basicConfig(level=logging.INFO)
 
 st.set_page_config(page_title="Vektra AI", page_icon="assets/logo.png", layout="wide")
 
 shared_source_dir, shared_vector_db_dir = get_shared_dirs()
+session_id = get_session_id()
+
 
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
@@ -34,21 +37,35 @@ else:
 
             for msg in st.session_state.messages:
                 st.chat_message(msg["role"]).write(msg["content"])
-
+                       
             if prompt := st.chat_input():
                 st.session_state.messages.append({"role": "user", "content": prompt})
                 st.chat_message("user").write(prompt)
-                
+
+                insert_chat_log(
+                    session_id=session_id,
+                    user_role=role,        
+                    message_role="user",
+                    message=prompt
+             )
+    
                 with st.chat_message("assistant"):
-                    # Admin de ortak alandan okur
                     qa_chain = get_rag_chain(shared_vector_db_dir)
                     if qa_chain:
                         res = qa_chain.invoke({"query": prompt})
-                        st.write(res['result'])
-                        st.session_state.messages.append({"role": "assistant", "content": res['result']})
+                        answer = res['result']
+                        st.write(answer)
+                        st.session_state.messages.append({"role": "assistant", "content": answer})
+            
+                        insert_chat_log(
+                            session_id=session_id,
+                            user_role=role,   # "Admin"
+                            message_role="assistant",
+                            message=answer
+                        )
                     else:
                         st.warning("Bilgi bankası boş.")
-        
+                        
         with tab2:
             render_dashboard()
 
@@ -65,12 +82,27 @@ else:
         if prompt := st.chat_input():
             st.session_state.messages.append({"role": "user", "content": prompt})
             st.chat_message("user").write(prompt)
+
+            insert_chat_log(
+                session_id=session_id,
+                user_role=role,            # "User"
+                message_role="user",
+                message=prompt
+            )
             
             with st.chat_message("assistant"):
                 qa_chain = get_rag_chain(shared_vector_db_dir)
                 if qa_chain:
                     res = qa_chain.invoke({"query": prompt})
-                    st.write(res['result'])
-                    st.session_state.messages.append({"role": "assistant", "content": res['result']})
+                    answer = res['result']
+                    st.write(answer)
+                    st.session_state.messages.append({"role": "assistant", "content": answer})
+
+                    insert_chat_log(
+                        session_id=session_id,
+                        user_role=role,     # "User"
+                        message_role="assistant",
+                        message=answer
+                    )
                 else:
                     st.error("Henüz yönetici tarafından sisteme veri yüklenmemiş. Lütfen bekleyiniz.")
