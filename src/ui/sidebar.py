@@ -32,7 +32,6 @@ def render_sidebar(user_role, shared_source_dir, shared_vector_db_dir):
             
         st.divider()
 
-        # ADMIN MODU: YÜKLEME VE İŞLEME 
         if user_role == "Admin":
             st.subheader("➕ Yeni Belge Ekle")
             st.info("Buradan yüklenen dosyalar tüm şirket tarafından erişilebilir.")
@@ -45,51 +44,52 @@ def render_sidebar(user_role, shared_source_dir, shared_vector_db_dir):
             
             col1, col2 = st.columns(2)
             
-with col1:
-    if st.button("🚀 İşle", use_container_width=True):
-        if uploaded_files:
-            with st.spinner("Kurumsal hafıza güncelleniyor..."):
-                try:
-                    if not os.path.exists(shared_source_dir):
-                        os.makedirs(shared_source_dir)
-                        
-                    saved_paths = []
-                    for f in uploaded_files:
-                        path = os.path.join(shared_source_dir, f.name)
-                        with open(path, "wb") as wb:
-                            wb.write(f.getbuffer())
-                        saved_paths.append(path)
-                    
-                    start = time.time()
-                    docs = load_documents(shared_source_dir)
-                    chunks = split_documents(docs)
-                    create_vector_db(chunks, shared_vector_db_dir)
-                    duration = round(time.time() - start, 2)
+            with col1:
+                if st.button("🚀 İşle", use_container_width=True):
+                    if uploaded_files:
+                        with st.spinner("Kurumsal hafıza güncelleniyor..."):
+                            try:
+                            
+                                if not os.path.exists(shared_source_dir):
+                                    os.makedirs(shared_source_dir)
+                                    
+                                saved_paths = []
+                                for f in uploaded_files:
+                                    path = os.path.join(shared_source_dir, f.name)
+                                    with open(path, "wb") as wb:
+                                        wb.write(f.getbuffer())
+                                    saved_paths.append(path)
+                                
+                                start = time.time()
+                                docs = load_documents(shared_source_dir)
+                                chunks = split_documents(docs)
+                                create_vector_db(chunks, shared_vector_db_dir)
+                                duration = round(time.time() - start, 2)
 
-                    chunk_counts = {}
-                    for ch in chunks:
-                        src = ch.metadata.get("source")
-                        if src:
-                            chunk_counts[src] = chunk_counts.get(src, 0) + 1
-                    
-                    session_id = "SHARED_ADMIN"
-                    for f, path in zip(uploaded_files, saved_paths):
-                        file_chunk_count = chunk_counts.get(path, 0)
-                        insert_document_log(
-                            session_id=session_id,
-                            filename=f.name,
-                            file_type=f.type,
-                            chunk_count=file_chunk_count,
-                            processing_time=duration
-                        )
-                        
-                    st.success(f"✅ Tamamlandı ({duration}s)")
-                    time.sleep(1)
-                    st.rerun() 
-                except Exception as e:
-                    st.error(f"Hata: {e}")
-        else:
-            st.warning("Lütfen dosya seçiniz.")
+                                chunk_counts = {}
+                                for ch in chunks:
+                                    src = ch.metadata.get("source")
+                                    if src:
+                                        chunk_counts[src] = chunk_counts.get(src, 0) + 1
+                                
+                                session_id = "SHARED_ADMIN"
+                                for f, path in zip(uploaded_files, saved_paths):
+                                    file_chunk_count = chunk_counts.get(path, 0)
+                                    insert_document_log(
+                                        session_id=session_id,
+                                        filename=f.name,
+                                        file_type=f.type,
+                                        chunk_count=file_chunk_count,
+                                        processing_time=duration
+                                    )
+                                    
+                                st.success(f"✅ Tamamlandı ({duration}s)")
+                                time.sleep(1)
+                                st.rerun() 
+                            except Exception as e:
+                                st.error(f"Hata: {e}")
+                    else:
+                        st.warning("Lütfen dosya seçiniz.")
 
             with col2:
                 if st.button("🗑️ Sıfırla", use_container_width=True):
@@ -98,9 +98,6 @@ with col1:
                     time.sleep(1)
                     st.rerun()
 
-        else:
-            st.info("👋 Çalışan modundasınız.\nYukarıdaki listede görünen belgeler hakkında soru sorabilirsiniz.")
-            
         st.divider()
         if st.button("Çıkış Yap"):
             st.session_state.clear()
