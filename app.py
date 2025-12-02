@@ -3,6 +3,7 @@ import logging
 from src.ui.login import render_login
 from src.ui.sidebar import render_sidebar
 from src.ui.dashboard import render_dashboard
+from src.ui.theme import load_theme
 from src.rag_chain import get_rag_chain
 from src.utils import get_shared_dirs, get_session_id
 from src.database import insert_chat_log
@@ -10,6 +11,8 @@ from src.database import insert_chat_log
 logging.basicConfig(level=logging.INFO)
 
 st.set_page_config(page_title="Vektra AI", page_icon="assets/logo.png", layout="wide")
+
+load_theme()
 
 shared_source_dir, shared_vector_db_dir = get_shared_dirs()
 session_id = get_session_id()
@@ -26,7 +29,9 @@ else:
     
     render_sidebar(role, shared_source_dir, shared_vector_db_dir)
     
-    st.title(f"🤖 Vektra AI ({role} Modu)")
+    st.title(f"Vektra AI ({role} Modu)")
+    st.caption("Kurumsal dokümanlarınız üzerinde akıllı arama ve soru-cevap asistanı.")
+
     
     if role == "Admin":
         tab1, tab2 = st.tabs(["💬 Sohbet", "📊 Yönetim Paneli"])
