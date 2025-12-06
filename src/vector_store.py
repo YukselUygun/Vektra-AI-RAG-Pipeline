@@ -5,9 +5,8 @@ from typing import List, Optional
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from src.embedding import get_embedding_model
-from src.config import Config
-from src.utils import get_shared_dirs
 
+# 1. LOGGING
 log_dir = "logs"
 if not os.path.exists(log_dir):
     os.makedirs(log_dir)
@@ -24,13 +23,14 @@ logger = logging.getLogger(__name__)
 
 def create_vector_db(chunks: List[Document], save_path: str) -> Optional[FAISS]:
     """
-    Parçalanmış metinleri vektöre çevirip, BELİRTİLEN YOLA (save_path) kaydeder.
-    (Windows'ta FAISS ile sorun yaşamamak için şu an atomic tmp klasör kullanmıyoruz.)
+    Gelen tüm parçaları (chunks) alır ve SIFIRDAN bir vektör veritabanı yaratıp kaydeder.
+    Bu fonksiyon "Full Refresh" mantığıyla çalışır.
     """
     if not chunks:
         logger.warning("⚠️ Vektörleştirilecek veri yok. İşlem atlandı.")
         return None
 
+    # Klasör yoksa oluştur
     if not os.path.exists(save_path):
         try:
             os.makedirs(save_path)
@@ -44,13 +44,15 @@ def create_vector_db(chunks: List[Document], save_path: str) -> Optional[FAISS]:
         
         embedding_model = get_embedding_model()
         
-        logger.info(f"🚀 {len(chunks)} parça için Vektör DB oluşturuluyor...")
+        logger.info(f"🚀 {len(chunks)} parça için Vektör DB OLUŞTURULUYOR (Sıfırdan)...")
         
+        # FAISS oluşturma (Eskiyi siler, yenisini yazar - Doğrusu budur çünkü tüm klasörü gönderiyoruz)
         vector_store = FAISS.from_documents(
             documents=chunks,
             embedding=embedding_model
         )
         
+        # Kaydetme
         vector_store.save_local(save_path)
         
         duration = time.time() - start_time
@@ -63,7 +65,7 @@ def create_vector_db(chunks: List[Document], save_path: str) -> Optional[FAISS]:
 
 def load_vector_db(load_path: str) -> Optional[FAISS]:
     """
-    BELİRTİLEN YOLDAKİ (load_path) veritabanını yükler.
+    Veritabanını diskten okur.
     """
     logger.info(f"📂 Vektör Veritabanı yükleniyor: {load_path}")
     
@@ -74,35 +76,18 @@ def load_vector_db(load_path: str) -> Optional[FAISS]:
     try:
         embedding_model = get_embedding_model()
         
-        # Yükleme
         vector_store = FAISS.load_local(
             load_path, 
             embedding_model,
             allow_dangerous_deserialization=True 
         )
         
-        logger.info("✅ Veritabanı başarıyla yüklendi ve aramaya hazır.")
+        logger.info("✅ Veritabanı başarıyla yüklendi.")
         return vector_store
         
     except Exception as e:
-        logger.error(f"❌ Veritabanı yüklenirken hata: {e}")
+        logger.error(f"❌ Yükleme hatası: {e}")
         return None
 
 if __name__ == "__main__":
-    from src.ingestion import load_documents, split_documents
-    
-    logger.info("🚀 Vector Store Modülü Başlatılıyor (Airflow Mode)...")
-    
-    shared_source_dir, shared_db_path = get_shared_dirs()
-    logger.info(f"📥 Kaynak: {shared_source_dir}")
-    logger.info(f"💾 Hedef DB: {shared_db_path}")
-    
-    docs = load_documents(shared_source_dir)
-    chunks = split_documents(docs)
-    
-    if chunks:
-        create_vector_db(chunks, shared_db_path)
-    else:
-        logger.warning("⚠️ İşlenecek doküman bulunamadı.")
-    
-    logger.info("🏁 Vector Store İşlemi Tamamlandı.")
+    pass
